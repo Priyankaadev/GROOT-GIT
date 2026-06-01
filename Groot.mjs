@@ -77,10 +77,26 @@ class Groot {
       return null;
     }
   }
+
+  async log() {
+    let currentCommitHash = await this.getCurrentHead();;
+    while(currentCommitHash){
+        const commitData = JSON.parse(await fs.readFile(path.join(this.objectsPath, currentCommitHash), {encoding: 'utf-8'}));
+        console.log(`------------------\n`)
+        console.log(`Commit: ${currentCommitHash}\nDate:${commitData.timeStamp}\n\n${commitData.message}\n\n`);
+        currentCommitHash = commitData.parent;
+    }
+  }
+
+
 }
 
 (async () => {
   const groot = new Groot();
   await groot.add("sample.txt");
-  await groot.commit("Initial commit");
+  await groot.commit("second commit");
+
+  await groot.log()
+
+
 })();
