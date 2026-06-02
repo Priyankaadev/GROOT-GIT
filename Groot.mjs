@@ -1,9 +1,12 @@
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { diffLines } from "diff";
+import chalk from "chalk";
 
 
 class Groot {
+
   constructor(repoPath = ".") {
     this.repoPath = path.join(repoPath, ".groot");
     this.objectsPath = path.join(this.repoPath, "objects"); //.groot/objects
@@ -88,15 +91,89 @@ class Groot {
     }
   }
 
+  async showCommitDiff(commitHash){
+    const commitData = JSON.parse(await this.getCommitData(commitHash));
+    if(!commitData){
+        console.log("commit not found");
+        return;
+    }
+    console.log('changes in the last commit are: ');
+
+    for(const file of commitData.files){
+        console.log(`File: ${file.path} `);
+    const fileContent = await this.getFileContent(file.hash);
+    console.log(fileContent);
+
+    if(commitData.parent){
+        //get the parent commit data
+        const parentCommitData = JSON.parse(await this.getCommitData(commitData.parent));
+        const getParentFileContent = await this.getParentFileContent(parentCommitData, file.path)
+
+        if(getParentFileContent !== undefined){
+          console.log('\nDiff: ')
+          const diff = diffLines(getParentFileContent, fileContent)
+          console.log(diff)
+
+          diff.forEach(part =>{
+            if(part.added){
+              process.stdout.write(chalk.green("++" +part.values))
+            }else if(part.removed){
+              process.stdout.write(chalk.red("--"+part.values))
+            }else{
+            process.stdout.write(chalk.grey(part.values))
+            }
+          });
+          console.log(); //new line
+        } else{
+          console.log(`New file in this commit `)
+        }
+      }
+      else{
+        console.log('first commit')
+      }
+    }
+}
+
+async getParentFileContent(parentCommitData, filePath){
+
+  const parentFile = parentCommitData.files.find(file=> file.path == filePath);
+  if(parentFile){
+    //get the file content from the parent commit and return the content
+    return await this.getFileContent(parentFile.hash);
+
+  }
+
+}
+
+  async getCommitData(commitHash){
+    const commitPath = path.join(this.objectsPath, commitHash);
+    try{
+        return await fs.readFile(commitPath, {encoding: 'utf-8' })
+    }
+    catch(error){
+        console.log('Failed to read the commit data', error)
+        return null;
+    }
+
+  }
+
+  async getFileContent(fileHash){
+    const objectPath = path.join(this.objectsPath, fileHash);
+    return fs.readFile(objectPath, {encoding: 'utf-8'})
+  }
 
 }
 
 (async () => {
   const groot = new Groot();
-  await groot.add("sample.txt");
-  await groot.commit("second commit");
+  // await groot.add("sample.txt");
+  // await groot.add("sample2.txt");
+  // await groot.commit("here we go");
 
-  await groot.log()
+  // await groot.log()
 
+
+
+  await groot.showCommitDiff('6032051a4f4807d0b51a5b1c11dffc51f8dad9b3')
 
 })();
